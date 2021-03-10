@@ -22,13 +22,25 @@ class Device:
             data = r.json()
             if len(data)!=1:
                 raise Exception(f"No device named {self.name} found in database")
-        
-    @property
-    def channels(self):
         url = urljoin(self.api_url,f"db/DataChannel?device={self.name}")
         r = requests.get(url,verify=self.verify,headers=self.headers)
         if r.status_code!=200:
             raise Exception(f"Could not fetch channels. {r.text}")
-        return [Channel(i['id'],api_url=self.api_url,api_key=self.api_key,verify=self.verify) for i in r.json()]
+        self.channels =  [Channel(i['id'],api_url=self.api_url,api_key=self.api_key,verify=self.verify) for i in r.json()]
+    
+    def push_data(self):
+        data = []
+        for channel in self.channels:
+            data+=channel.data_log
+        payload = {
+            "device_name":self.name,
+            "data":data
+        }
+        url = urljoin(self.api_url,"api/log_device_data")
+        r = requests.post(url,json=payload,verify=self.verify,headers=self.headers)
+        if r.status_code != 200:
+            raise Exception(f"Could not push device data. {r.text}")
+        for channel in self.channels:
+            channel.data_log = []
     
 

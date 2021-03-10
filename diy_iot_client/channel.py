@@ -1,12 +1,14 @@
 from datetime import datetime
-from urlib.parse import urljoin
+from urllib.parse import urljoin
 from .channel_entry import ChannelEntry
 from pydantic import BaseModel,validate_arguments,Field
-from typing import Dict,List
+from typing import Dict,List,Union
+import os
+import requests
 
 class ChannelDataLog(BaseModel):
     numeric_value:float
-    metadata:Dict
+    metadata:Dict=None
     time:datetime = Field(default_factory=datetime.utcnow)
 
 class Channel:
@@ -27,9 +29,11 @@ class Channel:
         data = r.json()
         if len(data)!=1:
             raise Exception(f"No device named {self.name} found in database")
+        data = data[0]
         self.name = data.get("name")
         self.device = data.get("device")
         self.data_type = data.get("data_type")
+        self.data_log = []
     def get_data(start_time:datetime=None,end_time:datetime=None):
         endpoint = f"api/query_device_data/{self.device}?channel={self.id}"
         if start_time:
@@ -42,13 +46,15 @@ class Channel:
             raise Exception(f"Error getting chnanel data. {r.text}")
         return [ChannelEntry(**k) for k in r.json()]
     @validate_arguments
-    def log_data(self,data:List[ChannelDataLog]):
-        url = urljoin(self.api_url,"api/log_device_data")
-        body  = {
-            "device_id":self.device,
-            "data":[i.dict() for i in data]
-        }
-        r = requests.post(url,json=body,headers=self.headers)
-        if r.status_code != 200:
-            raise Exception(f"Could not post data to {self.name} channel. {r.text}")
+    def log_data(self,data:Union[ChannelDataLog,List[ChannelDataLog]]):
+        if not isinstance(data,list):
+            data = [data]
+        for entry in data:
+            self.data_log.append({
+                "channel":self.name,
+                "numeric_value":entry.numeric_value,
+                "metadata":entry.metadata,
+                "time":str(entry.time)
+            })
+        
         
